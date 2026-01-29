@@ -1,0 +1,57 @@
+name: Daily AI TikTok Factory (Generate Only)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "15 14 * * *" # ~9:15am America/New_York (cron is UTC)
+
+jobs:
+  build-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate tag WAVs (ElevenLabs primary, OpenAI fallback)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          HEDRA_API_KEY: ${{ secrets.HEDRA_API_KEY }}
+        run: |
+          python scripts/build_tags.py
+          ls -lah audio/pack_v1/tags
+
+      - name: Run pipeline (Generate MP4)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          HEDRA_API_KEY: ${{ secrets.HEDRA_API_KEY }}
+          OUT_DIR: "out"
+          VIDEO_DURATION_MS: "15000"
+          ASPECT_RATIO: "9:16"
+          RESOLUTION: "720p"
+        run: |
+          python scripts/run_once.py
+          ls -lah out
+
+      - name: Upload artifact (video + assets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily_output
+          path: |
+            out/
+            audio/pack_v1/tags/
